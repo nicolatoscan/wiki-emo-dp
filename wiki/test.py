@@ -1,33 +1,32 @@
+# %% import
+from pathlib import Path
 from typing import Counter, List
-from tools import arg
-from tools import files
+from tools import files, userdata
 from datetime import datetime, timedelta
 import numpy as np
 from itertools import groupby
 
+
+# %% load user data
+lang = 'es'
+uData = userdata.loadUserData(Path(f'../dataset/genders/genders-{lang}.tsv'))
+print(f'Loaded {lang}')
+
+
+# %%
+savingFile = open(f'reply-{lang}.svg', 'w')
+
 def analyze(id: int, data: List[dict]) -> None:
-    """
-    Id
-    Nome
-    Numero edit
-    percentuale type actions
-    percentuale namespace
+    gender = -1
+    roles = ['*']
+    name = 'NOT FOUND'
 
-    Gender
-    Role
-
-    First edit date
-    Last edit date
-    Avg time between edits
-
-    perc emotions
-    perc emotion last 2 month
-    perc emotion last 1 month
-    perc emotion last 10 edits
-    perc emotion last 5 edits
-    perc emotion last 1 edits
-    """
-
+    if id in uData:
+        u = uData[id]
+        name = u.name
+        gender = u.gender
+        roles = u.roles
+    
     revs = []
     for k,vals in groupby(data,key=lambda x:x['id'].split('.')[0]):
         vals = [v for v in vals]
@@ -47,13 +46,12 @@ def analyze(id: int, data: List[dict]) -> None:
             "timestamp": datetime.fromisoformat(vals[0]['timestamp'].replace('Z', '+00:00')),
         })
 
-    name =  revs[0]['user']['text'] if 'text' in revs[0]['user'] else revs[0]['user']['ip']
+    # name =  revs[0]['user']['text'] if 'text' in revs[0]['user'] else revs[0]['user']['ip']
     nEdit = len(revs)
     firstEditDate = revs[0]['timestamp']
     lastEditDate = revs[-1]['timestamp']
     timeDiff = np.diff([ d['timestamp'] for d in revs ])
-    avgDiffTime = np.mean(timeDiff)
-
+    avgDiffTime = None if len(timeDiff) == 0 else np.mean(timeDiff).total_seconds()
 
     # % of types
     nTypeEdits = Counter([t for r in revs for t in r['type']])
@@ -91,8 +89,26 @@ def analyze(id: int, data: List[dict]) -> None:
         lastRev = [ r for r in lastRev if r['timestamp'] > d ]
         nEmo = np.sum( [ r['nEmotions'] for r in lastRev ])
         avgEm = np.average( [ r['emotionsNorm'] for r in lastRev ], axis=0)
-        
+
         perEmotionsLastDays.append( ( n, nEmo, avgEm ) )
 
-filesList = arg.getFiles()
+    lineParams = [
+        id,
+        gender,
+        ','.join(roles),
+        name,
+        nEdit,
+        firstEditDate,
+        lastEditDate,
+        avgDiffTime,
+        ','.join([ str(x) for x in perTypeEdits ]),
+        ','.join([ str(x) for x in perNamespaces ]),
+    ] + [ f"{x[0]}|{x[1]}|{','.join( [ str(i) for i in list(x[2]) ] )}"  for x in perEmotionsLastDays]
+    savingFile.write('\t'.join( [str(x) for x in lineParams ] ) + '\n')
+
+filesList = files.getFileList(f'../dataset/min/reply/{lang}', '*.gz')
 files.readFileSections(filesList, analyze)
+
+savingFile.close()
+print("Done")
+# %%
