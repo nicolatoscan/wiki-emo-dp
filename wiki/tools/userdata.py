@@ -14,7 +14,7 @@ def loadUserData(path: Path) -> Dict[int, UserData]:
     data = {}
     with open(path) as f:
         for l in tqdm(f):
-            info = l.strip('').split('\t')
+            info = l.strip('\n').split('\t')
             id = int(info[0])
             data[id] = UserData(
                 id,

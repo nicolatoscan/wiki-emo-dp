@@ -8,20 +8,43 @@ from itertools import groupby
 import json
 # import pymongo
 
-# %% load user data
+
+# %% settings
 typeAction = 'user'
 lang = 'it'
+
+namespaces = [ 1,2,3,5,7,9,11,13,15,101,119,711,829 ]
+typesEdit = ['CREATION', 'ADDITION', 'MODIFICATION', 'DELETION', 'RESTORATION']
+lastDays = [ 10000, 365, 180, 90, 60, 30, 7 ]
+
+rolesNames = [ '*', 'accountcreator', 'autoconfirmed', 'autopatrolled', 'bot', 'botadmin', 'bureaucrat', 'checkuser', 'confirmed', 'flow-bot', 'interface-admin', 'ipblock-exempt', 'mover', 'rollbacker', 'sysop', 'user' ]
+emotions = ["TOT", "POS", "NEG", "E0", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8"]
+headers = [
+    "id", "name", "nEdit", "firstEditDate", "lastEditDate", "avgDiffTime",
+    "female", "male",
+    *rolesNames,
+    *typesEdit,
+    *[ f"namespace {n}" for n in namespaces],
+    *[ f"{'' if n == 10000 else n}{e}" for n in lastDays for e in emotions]
+]
+
+
+
+
+# %% load user data
 uData = userdata.loadUserData(Path(f'../dataset/genders/genders-{lang}.tsv'))
 print(f'Loaded {lang}')
 
 # %% setup mongo
 # dbColl = pymongo.MongoClient("mongodb://localhost:27017/")["wiki"][f"{typeAction}-{lang}"]
 
-# %%
+# %% start
 savingFile = open(f'{typeAction}-{lang}.csv', 'w')
-savingFileJson = open(f'{typeAction}-{lang}.json', 'w')
+# savingFileJson = open(f'{typeAction}-{lang}.json', 'w')
 
-def analyze(id: int, data: List[dict]) -> None:
+savingFile.write(f'{",".join(headers)}\n')
+
+def analyze(id: int, data: List[dict]) -> bool:
     gender = -1
     roles = ['*']
     name = 'NOT FOUND'
@@ -69,78 +92,71 @@ def analyze(id: int, data: List[dict]) -> None:
 
     # % of types
     nTypeEdits = Counter([t for r in revs for t in r['type']])
-    perTypeEdits = [
-        nTypeEdits['CREATION'] / nEdit,
-        nTypeEdits['ADDITION'] / nEdit,
-        nTypeEdits['MODIFICATION'] / nEdit,
-        nTypeEdits['DELETION'] / nEdit,
-        nTypeEdits['RESTORATION'] / nEdit
-    ]
+    perTypeEdits = [ nTypeEdits[t] / nEdit for t in typesEdit ]
 
     # % of namespaces
     nNamespaces = Counter([d['pageNamespace'] for d in revs])
-    perNamespaces = [
-        nNamespaces[1] / nEdit,
-        nNamespaces[2] / nEdit,
-        nNamespaces[3] / nEdit,
-        nNamespaces[5] / nEdit,
-        nNamespaces[7] / nEdit,
-        nNamespaces[9] / nEdit,
-        nNamespaces[11] / nEdit,
-        nNamespaces[13] / nEdit,
-        nNamespaces[15] / nEdit,
-        nNamespaces[101] / nEdit,
-        nNamespaces[119] / nEdit,
-        nNamespaces[711] / nEdit,
-        nNamespaces[829] / nEdit,
-    ]
+    perNamespaces = [ nNamespaces[n] / nEdit for n in namespaces ]
 
 
     lastRev = revs
     perEmotionsLastDays = []
-    for n in [ 10000, 365, 180, 90, 60, 30, 7 ]:
+    for n in lastDays:
         d = lastEditDate - timedelta(days=n)
         lastRev = [ r for r in lastRev if r['timestamp'] > d ]
         nEmo = np.sum( [ r['nEmotions'] for r in lastRev ])
         avgEm = np.average( [ r['emotionsNorm'] for r in lastRev ], axis=0)
-
         perEmotionsLastDays.append( ( n, nEmo, avgEm ) )
 
-    lineParams = [
-        id,
-        gender,
-        ','.join(roles),
-        name,
-        nEdit,
-        firstEditDate,
-        lastEditDate,
+    # lineParams = [
+    #     id,
+    #     gender,
+    #     ','.join(roles),
+    #     name,
+    #     nEdit,
+    #     firstEditDate,
+    #     lastEditDate,
+    #     avgDiffTime,
+    #     ','.join([ str(x) for x in perTypeEdits ]),
+    #     ','.join([ str(x) for x in perNamespaces ]),
+    # ] + [ f"{x[0]}|{x[1]}|{','.join( [ str(i) for i in list(x[2]) ] )}"  for x in perEmotionsLastDays]
+    # savingFile.write('\t'.join( [str(x) for x in lineParams ] ) + '\n')
+
+    # d = {
+    #     "id": id,
+    #     "gender": gender,
+    #     "roles": roles,
+    #     "name": name,
+    #     "nEdit": nEdit,
+    #     "firstEditDate": firstEditDate.isoformat(),
+    #     "lastEditDate": lastEditDate.isoformat(),
+    #     "avgDiffTime": avgDiffTime,
+    #     "editTypes": perTypeEdits,
+    #     "namespaces": perNamespaces,
+    #     "emotionsLastDays": [ { "n": int(x[0]), "nEmo": int(x[1]), "avg": x[2].tolist() } for x in perEmotionsLastDays ]
+    # }
+    # savingFileJson.write(f'{json.dumps(d)}\n')
+
+    emlastD = [ [ x[1], *x[2] ] for x in perEmotionsLastDays ]
+    pdList = [
+        id, f'"{name}"', nEdit,
+        firstEditDate.replace(tzinfo=None).isoformat(), lastEditDate.replace(tzinfo=None).isoformat(),
         avgDiffTime,
-        ','.join([ str(x) for x in perTypeEdits ]),
-        ','.join([ str(x) for x in perNamespaces ]),
-    ] + [ f"{x[0]}|{x[1]}|{','.join( [ str(i) for i in list(x[2]) ] )}"  for x in perEmotionsLastDays]
-    savingFile.write('\t'.join( [str(x) for x in lineParams ] ) + '\n')
+        1 if gender == 0 else 0,
+        1 if gender == 1 else 0,
+        *[ 1 if r in roles else 0 for r in rolesNames ],
+        *perTypeEdits, *perNamespaces,
+        *[ x for l in emlastD for x in l ],
+    ]
+    savingFile.write(f"{','.join([ str(x) for x in pdList ])}\n")
+    return True
 
-    d = {
-        "id": id,
-        "gender": gender,
-        "roles": roles,
-        "name": name,
-        "nEdit": nEdit,
-        "firstEditDate": firstEditDate.isoformat(),
-        "lastEditDate": lastEditDate.isoformat(),
-        "avgDiffTime": avgDiffTime,
-        "editTypes": perTypeEdits,
-        "namespaces": perNamespaces,
-        "emotionsLastDays": [ { "n": int(x[0]), "nEmo": int(x[1]), "avg": x[2].tolist() } for x in perEmotionsLastDays ]
-    }
-
-    savingFileJson.write(f'{json.dumps(d)}\n')
 
 
 filesList = files.getFileList(f'../dataset/min/{typeAction}/{lang}', '*.gz')
 files.readFileSections(filesList, analyze)
 
 savingFile.close()
-savingFileJson.close()
+# savingFileJson.close()
 print("Done")
 # %%

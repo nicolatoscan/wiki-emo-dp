@@ -4,7 +4,7 @@ import json
 from typing import Callable, List
 from tqdm import tqdm
 
-def readFileSections(files: List[Path], callback: Callable[[int, List[dict]], None]) -> None:
+def readFileSections(files: List[Path], callback: Callable[[int, List[dict]], bool]) -> None:
     for file in files:
         with gzip.open(file, 'rt') as f:
             currId: None | int = None
@@ -16,14 +16,17 @@ def readFileSections(files: List[Path], callback: Callable[[int, List[dict]], No
 
                 if id != currId:
                     if currId is not None:
-                        callback(currId, currData)
+                        r = callback(currId, currData)
+                        if not r: return
                     currId = id
                     currData = []
 
                 currData.append(json.loads(data))
 
             if currId is not None and len(currData) > 0:
-                callback(currId, currData)
+                r = callback(currId, currData)
+                if not r: return
+
 
         print(f'Done {file}')
 
