@@ -28,11 +28,11 @@ headers = [
 ]
 
 # %% load user data
-uData = userdata.loadUserData(Path(f'../dataset/genders/genders-{lang}.tsv'))
-print(f'Loaded {lang}')
+filePath = Path(f'../dataset/genders/genders-{lang}.tsv')
+# uData = userdata.loadUserData(filePath)
+# print(f'Loaded {lang}')
 
-# %% setup mongo
-# dbColl = pymongo.MongoClient("mongodb://localhost:27017/")["wiki"][f"{typeAction}-{lang}"]
+uData = userdata.loadUserDataLive(filePath)
 
 # %% start
 savingFile = open(f'{typeAction}-{lang}.csv', 'w')
@@ -40,16 +40,30 @@ savingFile = open(f'{typeAction}-{lang}.csv', 'w')
 
 savingFile.write(f'{",".join(headers)}\n')
 
+u: userdata.UserData = next(uData)
+nomatch = 0
 def analyze(id: int, data: List[dict]) -> bool:
+    global u, nomatch
     gender = -1
     roles = ['*']
     name = None
 
-    if id in uData:
-        u = uData[id]
-        # name = u.name
-        gender = u.gender
-        roles = u.roles
+    if 'user' in data[0] and 'text' in data[0]['user']:
+        while u is None or u.id < id:
+            u = next(uData)
+        if u.id == id:
+            gender = u.gender
+            roles = u.roles
+        else:
+            nomatch += 1
+            print(f"No match for {data[0]['user']['text']}")
+    # if id in uData:
+    #     u = uData[id]
+    #     # name = u.name
+    #     gender = u.gender
+    #     roles = u.roles
+
+
     
     revs = []
     for k,vals in groupby(data,key=lambda x:x['id'].split('.')[0]):
