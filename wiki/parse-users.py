@@ -1,6 +1,6 @@
 # %% import
 from pathlib import Path
-from typing import Counter, List
+from typing import Counter, List, Union
 from tools import files, userdata
 from datetime import datetime, timedelta
 import numpy as np
@@ -8,28 +8,24 @@ from itertools import groupby
 import json
 # import pymongo
 
-
 # %% settings
 typeAction = 'user'
-lang = 'it'
+lang = 'en'
 
 namespaces = [ 1,2,3,5,7,9,11,13,15,101,119,711,829 ]
 typesEdit = ['CREATION', 'ADDITION', 'MODIFICATION', 'DELETION', 'RESTORATION']
 lastDays = [ 10000, 365, 180, 90, 60, 30, 7 ]
 
 rolesNames = [ '*', 'accountcreator', 'autoconfirmed', 'autopatrolled', 'bot', 'botadmin', 'bureaucrat', 'checkuser', 'confirmed', 'flow-bot', 'interface-admin', 'ipblock-exempt', 'mover', 'rollbacker', 'sysop', 'user' ]
-emotions = ["TOT", "POS", "NEG", "E0", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8"]
+emotions = ["TOT", "POS", "NEG", "E0", "E1", "E2", "E3", "E4", "E5", "E6", "E7"]
 headers = [
-    "id", "name", "nEdit", "firstEditDate", "lastEditDate", "avgDiffTime",
+    "id", "name", "ip", "nEdit", "firstEditDate", "lastEditDate", "avgDiffTime",
     "female", "male",
     *rolesNames,
     *typesEdit,
-    *[ f"namespace {n}" for n in namespaces],
-    *[ f"{'' if n == 10000 else n}{e}" for n in lastDays for e in emotions]
+    *[ f"namespace {n}" for n in namespaces ],
+    *[ f"{'' if n == 10000 else n}{e}" for n in lastDays for e in emotions ]
 ]
-
-
-
 
 # %% load user data
 uData = userdata.loadUserData(Path(f'../dataset/genders/genders-{lang}.tsv'))
@@ -47,11 +43,11 @@ savingFile.write(f'{",".join(headers)}\n')
 def analyze(id: int, data: List[dict]) -> bool:
     gender = -1
     roles = ['*']
-    name = 'NOT FOUND'
+    name = None
 
     if id in uData:
         u = uData[id]
-        name = u.name
+        # name = u.name
         gender = u.gender
         roles = u.roles
     
@@ -79,12 +75,16 @@ def analyze(id: int, data: List[dict]) -> bool:
             "pageId": vals[0]['pageId'],
             "pageTitle": vals[0]['pageTitle'],
             "pageNamespace": vals[0]['pageNamespace'],
-            "user": vals[0]['user'],
+            "user": vals[0]['user'] if vals[0]['user'] is not None else {},
             "timestamp": datetime.fromisoformat(vals[0]['timestamp'].replace('Z', '+00:00')),
         })
 
-    # name =  revs[0]['user']['text'] if 'text' in revs[0]['user'] else revs[0]['user']['ip']
     nEdit = len(revs)
+    if nEdit == 0:
+        return True
+    if name == None and 'text' in revs[0]['user']:
+        name =  revs[0]['user']['text']
+    ip = revs[0]['user']['ip'] if 'ip' in revs[0]['user'] else None
     firstEditDate = revs[0]['timestamp']
     lastEditDate = revs[-1]['timestamp']
     timeDiff = np.diff([ d['timestamp'] for d in revs ])
@@ -139,7 +139,7 @@ def analyze(id: int, data: List[dict]) -> bool:
 
     emlastD = [ [ x[1], *x[2] ] for x in perEmotionsLastDays ]
     pdList = [
-        id, f'"{name}"', nEdit,
+        id, f'"{name}"', ip, nEdit,
         firstEditDate.replace(tzinfo=None).isoformat(), lastEditDate.replace(tzinfo=None).isoformat(),
         avgDiffTime,
         1 if gender == 0 else 0,
@@ -149,6 +149,7 @@ def analyze(id: int, data: List[dict]) -> bool:
         *[ x for l in emlastD for x in l ],
     ]
     savingFile.write(f"{','.join([ str(x) for x in pdList ])}\n")
+
     return True
 
 
