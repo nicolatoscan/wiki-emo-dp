@@ -35,10 +35,16 @@ filePath = Path(f'../dataset/genders/genders-{lang}.tsv')
 uData = userdata.loadUserDataLive(filePath)
 
 # %% start
-savingFile = open(f'{typeAction}-{lang}.csv', 'w')
+savingFile = None
+
+def changeFile(f):
+    global savingFile
+    if savingFile is not None:
+        savingFile.close()
+    savingFile = open(f'{f}.csv', 'w')
 # savingFileJson = open(f'{typeAction}-{lang}.json', 'w')
 
-savingFile.write(f'{",".join(headers)}\n')
+# savingFile.write(f'{",".join(headers)}\n')
 
 u: userdata.UserData = next(uData)
 nomatch = 0
@@ -168,8 +174,8 @@ def analyze(id: int, data: List[dict]) -> bool:
 
 
 
-filesList = files.getFileList(f'../dataset/min/{typeAction}/{lang}', '*.gz')
-files.readFileSections(filesList, analyze)
+filesList = files.getFileList(f'../dataset/min/{typeAction}/{lang}', '*.json.gz')
+files.readFileSections(filesList, analyze, changeFile)
 
 savingFile.close()
 # savingFileJson.close()

@@ -12,7 +12,7 @@ class UserData:
 
 rolesMap = { r:i for i, r in enumerate(['bureaucrat', 'reviewer', 'founder', 'checkuser', 'import', 'templateeditor', 'abusefilter', 'confirmed', 'extendedmover', 'copyviobot', 'rollbacker', 'user', 'oversight', 'researcher', 'autoconfirmed', 'patroller', 'sysop', 'accountcreator', 'extendedconfirmed', 'abusefilter-helper', 'autoreviewer', '*', 'eventcoordinator', 'ipblock-exempt', 'massmessage-sender', 'interface-admin', 'filemover', 'flow-bot', 'bot']) }
 
-def parseUser(line: str) -> UserData | None:
+def parseUser(line: str):
     info = line.strip('\n').split('\t')
     if len(info) > 5:
         id = int(info[0])
